@@ -1,0 +1,66 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    /* background: #000; */
+}
+
+canvas {
+    display: block;
+}
+
+#controls {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #ddd;
+    font: 13px/1.6 monospace;
+    padding: 12px 16px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 10;
+    min-width: 220px;
+}
+
+#controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+#controls label:has(input[type=checkbox]) {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+
+#controls input[type=number],
+#controls select {
+    background: #1a1a1a;
+    color: #eee;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 3px 6px;
+    font: inherit;
+}
+
+#controls input[type=checkbox] {
+    width: fit-content;
+}
+
+#controls button {
+    margin-top: 4px;
+    padding: 5px;
+    background: #2a6;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font: inherit;
+}
+
+#controls button:hover {
+    background: #3b7;
+}

@@ -6,13 +6,13 @@ const k = 8.98755e9; // N m^2/C^2
 
 // === Variables
 
-const M = 8.54e36;
-const a = 0.2 * M;
-const Q = 0.0;
+const M_SUN = 1.98892e30; // kg
 
-const Rs = (2 * G * M) / (c * c);
-const Rq = Math.sqrt(Q ^ ((2 * G) / (4 * Math.PI * e * c * c * c * c)));
-const scale = 1.0 / Rs;
+let M = 4.3e6 * M_SUN;   // solar masses
+let aStar = 0.0; // dimensionless spin  a* = a/M  in [0,1)
+let QStar = 0.0; // dimensionless charge in [0,1)
+
+let Rs, scale;
 
 // === Simulation State ===
 let objects = [
@@ -20,6 +20,18 @@ let objects = [
     { pos: [0, 0, 4e11], radius: 4e10, color: [1, 0.3, 0, 1], mass: 1.98892e30 },
     { pos: [0, 0, 0], radius: Rs, color: [0, 0, 0, 1], mass: M },
 ];
+
+function updateBHParams(massSolar, aStarIn, qStarIn) {
+    M = massSolar * M_SUN;
+    aStar = aStarIn;
+    QStar = qStarIn;
+    Rs = (2 * G * M) / (c * c);
+    scale = 1.0 / Rs;
+
+    objects[2].mass = M;
+    objects[2].radius = Rs;
+}
+updateBHParams(4.3e6, 0.0, 0.0); // 4.3e6 solar masses is Sag A*'s mass
 
 const cam = {
     radius: 6.34194e10,
@@ -57,8 +69,7 @@ if (!gl) {
     alert("WebGL 2 is required (update your browser).");
 }
 
-const RT_W = 150,
-    RT_H = 150;
+let RT_W = 150, RT_H = 150;
 
 // === !!! Shaders !!! ===
 const RT_FS = `#version 300 es
@@ -83,14 +94,16 @@ uniform float diskR1;
 uniform float diskR2;
 
 // Black hole constants
-const float Rs = 1.0;
-const float BH_M = 0.5; // M = Rs/2
-const float BH_A = 0.;
-const float BH_Q = 0.;
+uniform float BH_M;
+uniform float BH_A;
+uniform float BH_Q;
 
-const float A2 = BH_A*BH_A;
-const float Q2 = BH_Q*BH_Q;
-const float BH_RPLUS = BH_M + sqrt(max(BH_M*BH_M - A2 - Q2, 0.0));
+const float Rs = 1.0;
+
+float A2;
+float Q2;
+float BH_RPLUS;
+
 const float ESCAPE_R = 85.0;
 const int STEPS = 2000;
 
@@ -283,7 +296,10 @@ bool diskCross(vec3 a, vec3 b) {
 float hash(float n)  { return fract(sin(n) * 43758.5453); }
 float hash3(vec3 v)  { return hash(v.x*127.1 + v.y*311.7 + v.z*74.7); }
 
-void main() {
+void main() {    
+    A2 = BH_A * BH_A;
+    Q2 = BH_Q * BH_Q;
+    BH_RPLUS = BH_M + sqrt(max(BH_M*BH_M - A2 - Q2, 0.0));
     float u   = (2.0*vUV.x - 1.0) * aspect * tanHalfFov;
     float v   = (1.0 - 2.0*vUV.y) * tanHalfFov;
     vec3  dir = normalize(u*camRight - v*camUp + camFwd);
@@ -374,7 +390,7 @@ uniform float bhA;
 void main() {
     float r     = length(aPos.xz);
     float rNorm = max(r / bhRs, 1.0);
-    float angle = bhA / (2.0 * rNorm * rNorm * rNorm);
+    float angle =  bhA / (2.0 * rNorm * rNorm * rNorm);
 
     float ca = cos(angle), sa = sin(angle);
     vec3 dragged = vec3(
@@ -432,17 +448,17 @@ gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
 const rtFBO = gl.createFramebuffer();
 const rtTex = gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D, rtTex);
-gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    RT_W,
-    RT_H,
-    0,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    null,
-);
+function resizeRT(w, h) {
+    RT_W = w; RT_H = h;
+    gl.bindTexture(gl.TEXTURE_2D, rtTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, RT_W, RT_H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, rtFBO);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, rtTex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+resizeRT(RT_W, RT_H);
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 gl.bindFramebuffer(gl.FRAMEBUFFER, rtFBO);
@@ -596,6 +612,9 @@ const rtU = {
     time: gl.getUniformLocation(rtProg, "time"),
     showDisk: gl.getUniformLocation(rtProg, "showDisk"),
     bendLight: gl.getUniformLocation(rtProg, "bendLight"),
+    bhM: gl.getUniformLocation(rtProg, "BH_M"),
+    bhA: gl.getUniformLocation(rtProg, "BH_A"),
+    bhQ: gl.getUniformLocation(rtProg, "BH_Q"),
 };
 const blitU = { tex: gl.getUniformLocation(blitProg, "uTex") };
 const gridU = {
@@ -703,10 +722,14 @@ function render(t) {
     gl.uniform1f(rtU.diskR2, Rs * 5.2 * scale);
     gl.uniform1f(rtU.time, t * 0.001);
     gl.uniform1i(rtU.showDisk, showAccretionDisk ? 1 : 0);
+    gl.uniform1f(rtU.bhM, 0.5);
+    gl.uniform1f(rtU.bhA, aStar);
+    gl.uniform1f(rtU.bhQ, QStar);
     gl.uniform1i(rtU.bendLight, bendLight ? 1 : 0);
-
     gl.bindVertexArray(quadVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+
 
     // Blit to screen
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -728,8 +751,8 @@ function render(t) {
 
     gl.useProgram(gridProg);
     gl.uniformMatrix4fv(gridU.vp, false, viewProj);
-    gl.uniform1f(gridU.bhRS, Rs); // SI metres
-    gl.uniform1f(gridU.bhA, 0.9); // spin a* — tune 0..1 !!!! NEED TO PLUG IN THE `A` VALUE ONCE WE ADD IT
+    gl.uniform1f(gridU.bhRS, Rs);
+    gl.uniform1f(gridU.bhA, aStar);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.disable(gl.DEPTH_TEST);
@@ -747,3 +770,53 @@ function render(t) {
 }
 
 requestAnimationFrame(render);
+
+const resSelect = document.getElementById('resSelect');
+const chkDisk = document.getElementById('chkDisk');
+const chkBend = document.getElementById('chkBend');
+const inMass = document.getElementById('inMass');
+const inSpin = document.getElementById('inSpin');
+const inCharge = document.getElementById('inCharge');
+const btnApply = document.getElementById('btnApply');
+const validMsg = document.getElementById('validMsg');
+
+chkDisk.addEventListener('change', () => { showAccretionDisk = chkDisk.checked; });
+chkBend.addEventListener('change', () => { bendLight = chkBend.checked; });
+
+resSelect.addEventListener('change', () => {
+    const res = parseInt(resSelect.value);
+    resizeRT(res, res);
+});
+
+btnApply.addEventListener('click', () => {
+    validMsg.textContent = '';
+
+    const massSolar = parseFloat(inMass.value);
+    const aIn = parseFloat(inSpin.value);
+    const qIn = parseFloat(inCharge.value);
+
+    if (isNaN(massSolar) || massSolar <= 0) {
+        validMsg.textContent = 'Mass must be a positive number.'; return;
+    }
+    if (isNaN(aIn) || aIn < 0 || aIn >= 1) {
+        validMsg.textContent = 'Spin a* must be in [0, 1).'; return;
+    }
+    if (isNaN(qIn) || qIn < 0 || qIn >= 1) {
+        validMsg.textContent = 'Charge Q* must be in [0, 1).'; return;
+    }
+    if (aIn * aIn + qIn * qIn > 1.0) {
+        validMsg.textContent =
+            `Invalid: a*² + Q*² = ${(aIn * aIn + qIn * qIn).toFixed(4)} > 1.  ` +
+            `Reduce spin or charge to keep a black hole.`;
+        return;
+    }
+
+    updateBHParams(massSolar, aIn, qIn);
+
+    const res = parseInt(resSelect.value);
+    resizeRT(res, res);
+
+    validMsg.style.color = '#8f8';
+    validMsg.textContent = `✓ Applied — Rs = ${Rs.toExponential(3)} m`;
+    setTimeout(() => { validMsg.textContent = ''; validMsg.style.color = '#f88'; }, 3000);
+});

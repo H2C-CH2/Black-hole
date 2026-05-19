@@ -10,7 +10,34 @@
   <canvas id="c"></canvas>
 
   <script type="module" src="script.js"></script>
+  <div id="controls">
+    <label>Resolution
+      <select id="resSelect">
+        <option value="80">80 × 80 (fast)</option>
+        <option value="150" selected>150 × 150 (default)</option>
+        <option value="300">300 × 300 (slow)</option>
+        <option value="500">500 × 500 (very slow)</option>
+      </select>
+    </label>
 
+    <label><input type="checkbox" id="chkDisk" checked> Accretion disk</label>
+    <label><input type="checkbox" id="chkBend" checked> Bend light</label>
+
+    <label>Mass (solar masses)
+      <input type="number" id="inMass" value="4.3e6" min="1" step="any">
+    </label>
+
+    <label>Spin a* [0, 1)
+      <input type="number" id="inSpin" value="0.2" min="0" max="0.9999" step="0.01">
+    </label>
+
+    <label>Charge Q [0, 1)
+      <input type="number" id="inCharge" value="0.0" min="0" max="0.9999" step="0.01">
+    </label>
+
+    <button id="btnApply">Apply</button>
+    <p id="validMsg" style="color:#f88;margin:4px 0;font-size:0.8em;min-height:1em"></p>
+  </div>
 </body>
 
 </html>

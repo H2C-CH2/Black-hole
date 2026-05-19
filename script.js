@@ -57,6 +57,7 @@ const cam = {
 
 let showAccretionDisk = true;
 let bendLight = true;
+let rk4 = false;
 let frameCount = 0,
     fps = 0,
     fpsTimer = 0;
@@ -80,6 +81,7 @@ out vec4 frag;
 uniform float time;
 uniform bool showDisk;
 uniform bool bendLight;
+uniform bool rk4;
 
 uniform vec3 camPos;
 uniform vec3 camRight;
@@ -280,11 +282,38 @@ void stepRay(inout Ray ray) {
         ray.pos  = vec4(ray.pos.x, r, th, ph);
         return;
     }
-    float dL  = dynStep(ray.pos, ray.vel);
-    vec4  acc = kerrAccel(ray.pos, ray.vel);
-    ray.vel  += acc * dL;
-    ray.pos  += ray.vel * dL;
+
+    if(!rk4) {
+        float dL  = dynStep(ray.pos, ray.vel);
+        vec4  acc = kerrAccel(ray.pos, ray.vel);
+        ray.vel  += acc * dL;
+        ray.pos  += ray.vel * dL;
+        syncCart(ray);
+        return;
+    }
+
+    float dL = dynStep(ray.pos, ray.vel);
+
+    vec4 p1 = ray.pos, v1 = ray.vel;
+    vec4 a1 = kerrAccel(p1, v1);
+
+    vec4 p2 = p1 + v1 * (dL * 0.5);
+    vec4 v2 = v1 + a1 * (dL * 0.5);
+    vec4 a2 = kerrAccel(p2, v2);
+
+    vec4 p3 = p1 + v2 * (dL * 0.5);
+    vec4 v3 = v1 + a2 * (dL * 0.5);
+    vec4 a3 = kerrAccel(p3, v3);
+
+    vec4 p4 = p1 + v3 * dL;
+    vec4 v4 = v1 + a3 * dL;
+    vec4 a4 = kerrAccel(p4, v4);
+
+    ray.pos = p1 + (dL / 6.0) * (v1 + 2.0*v2 + 2.0*v3 + v4);
+    ray.vel = v1 + (dL / 6.0) * (a1 + 2.0*a2 + 2.0*a3 + a4);
+
     syncCart(ray);
+
 }
 
 bool diskCross(vec3 a, vec3 b) {
@@ -612,6 +641,7 @@ const rtU = {
     time: gl.getUniformLocation(rtProg, "time"),
     showDisk: gl.getUniformLocation(rtProg, "showDisk"),
     bendLight: gl.getUniformLocation(rtProg, "bendLight"),
+    rk4: gl.getUniformLocation(rtProg, "rk4"),
     bhM: gl.getUniformLocation(rtProg, "BH_M"),
     bhA: gl.getUniformLocation(rtProg, "BH_A"),
     bhQ: gl.getUniformLocation(rtProg, "BH_Q"),
@@ -726,6 +756,7 @@ function render(t) {
     gl.uniform1f(rtU.bhA, aStar);
     gl.uniform1f(rtU.bhQ, QStar);
     gl.uniform1i(rtU.bendLight, bendLight ? 1 : 0);
+    gl.uniform1i(rtU.rk4, rk4 ? 1 : 0);
     gl.bindVertexArray(quadVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -774,6 +805,7 @@ requestAnimationFrame(render);
 const resSelect = document.getElementById('resSelect');
 const chkDisk = document.getElementById('chkDisk');
 const chkBend = document.getElementById('chkBend');
+const chkRk4 = document.getElementById('chkRk4');
 const inMass = document.getElementById('inMass');
 const inSpin = document.getElementById('inSpin');
 const inCharge = document.getElementById('inCharge');
@@ -782,6 +814,7 @@ const validMsg = document.getElementById('validMsg');
 
 chkDisk.addEventListener('change', () => { showAccretionDisk = chkDisk.checked; });
 chkBend.addEventListener('change', () => { bendLight = chkBend.checked; });
+chkRk4.addEventListener('change', () => { rk4 = chkRk4.checked; });
 
 resSelect.addEventListener('change', () => {
     const res = parseInt(resSelect.value);
@@ -817,6 +850,6 @@ btnApply.addEventListener('click', () => {
     resizeRT(res, res);
 
     validMsg.style.color = '#8f8';
-    validMsg.textContent = `✓ Applied — Rs = ${Rs.toExponential(3)} m`;
+    validMsg.textContent = `Applied!`;
     setTimeout(() => { validMsg.textContent = ''; validMsg.style.color = '#f88'; }, 3000);
 });
